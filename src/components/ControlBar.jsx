@@ -7,7 +7,7 @@ import { AlertTriangle, Mic, Square } from 'lucide-react';
 import { useStore } from '../store/useStore.js';
 import { usePipeline } from '../hooks/usePipeline.js';
 import LanguageSelect from './LanguageSelect.jsx';
-import { SOURCE_LANGUAGES } from '../lib/languages.js';
+import { SOURCE_LANGUAGES, TARGET_LANGUAGES } from '../lib/languages.js';
 
 /**
  * Input level meter: a single gradient bar whose width tracks the smoothed
@@ -103,6 +103,13 @@ export default function ControlBar() {
           onChange={(code) => useStore.getState().updateSettings({ sourceLang: code })}
           includeAuto
           languages={SOURCE_LANGUAGES}
+        />
+        <LanguageSelect
+          id="target-language"
+          label="Translate to"
+          value={useStore((s) => s.settings.targetLang)}
+          onChange={(code) => useStore.getState().updateSettings({ targetLang: code })}
+          languages={TARGET_LANGUAGES}
         />
       </div>
       <LevelMeter />

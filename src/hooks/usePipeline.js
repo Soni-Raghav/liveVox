@@ -30,10 +30,17 @@ export function usePipeline() {
       updateSegment: (id, patch) => useStore.getState().updateSegment(id, patch),
       onModelEvent: (kind, patch) => {
         const store = useStore.getState();
-        if (kind === 'device') store.setModels({ device: patch });
-        else store.setModelEntry(kind, patch);
+        if (kind === 'device') {
+          store.setModels({ device: patch });
+          return;
+        }
+        store.setModelEntry(kind, patch);
+        // "Ready" gates the ModelManager: ASR is mandatory, NLLB optional
+        // (the engine chain falls back to Chrome Translator / MyMemory).
+        if (kind === 'asr') store.setModels({ ready: patch.status === 'ready' });
       },
       getSettings: () => useStore.getState().settings,
+      getGlossary: () => useStore.getState().glossary,
     });
   }
 
