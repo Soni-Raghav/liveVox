@@ -111,3 +111,10 @@ export const DEFAULTS = {
   TRANSLATED_VOLUME: 1,
   DUCKING_ENABLED: true,
 };
+
+/** UI limits. */
+export const UI = {
+  TRANSCRIPT_MAX_SEGMENTS: 500, // cap the in-memory transcript history
+  LATENCY_GOOD_MS: 3000, // badge turns amber above this
+  LATENCY_BAD_MS: 5000, // ...and red above this
+};
