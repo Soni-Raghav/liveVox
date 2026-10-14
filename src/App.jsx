@@ -18,16 +18,19 @@ import ControlBar from './components/ControlBar.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import LatencyBadge from './components/LatencyBadge.jsx';
 import ModelManager from './components/ModelManager.jsx';
+import OfflineChip from './components/OfflineChip.jsx';
 import PipWidget from './components/PipWidget.jsx';
 import PrivacyBanner from './components/PrivacyBanner.jsx';
 import SettingsDialog from './components/SettingsDialog.jsx';
 import StatusChip from './components/StatusChip.jsx';
 import TranscriptPanel from './components/TranscriptPanel.jsx';
+import UpdatePrompt, { OfflineReadyToast } from './components/UpdatePrompt.jsx';
 import VolumeMixer from './components/VolumeMixer.jsx';
 import { useDocumentPiP } from './hooks/useDocumentPiP.js';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts.js';
 import { useOnlineStatus } from './hooks/useOnlineStatus.js';
 import { usePipeline } from './hooks/usePipeline.js';
+import { PWA } from './lib/constants.js';
 import { useStore } from './store/useStore.js';
 
 /** Shared classes for the compact icon buttons in the header. */
@@ -46,9 +49,23 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const modelsReady = useStore((s) => s.models.ready);
   const theme = useStore((s) => s.settings.theme);
+  const pwaNeedRefresh = useStore((s) => s.pwaNeedRefresh);
+  const pwaOfflineReady = useStore((s) => s.pwaOfflineReady);
   const pip = useDocumentPiP();
   useOnlineStatus();
   useKeyboardShortcuts({ onStart: start, onStop: stop, onToggleMute: toggleMute, isRunning });
+
+  // The update toast is dismissable but does not auto-hide (a waiting
+  // worker stays waiting); the offline-ready toast is informational only.
+  const [updateDismissed, setUpdateDismissed] = useState(false);
+  const [offlineToastDone, setOfflineToastDone] = useState(false);
+  const showOfflineToast = pwaOfflineReady && !offlineToastDone;
+
+  useEffect(() => {
+    if (!showOfflineToast) return undefined;
+    const timer = setTimeout(() => setOfflineToastDone(true), PWA.OFFLINE_READY_TOAST_MS);
+    return () => clearTimeout(timer);
+  }, [showOfflineToast]);
 
   // Keep <html class="dark"> in sync with the persisted theme.
   useEffect(() => {
@@ -71,6 +88,7 @@ export default function App() {
               LiveVox
             </div>
             <div className="ml-auto flex items-center gap-2">
+              <OfflineChip />
               <LatencyBadge />
               <StatusChip />
               {pip.supported && (
@@ -118,6 +136,13 @@ export default function App() {
         </footer>
 
         {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+
+        {/* PWA toasts: update prompt (persistent, action required) and the
+            one-time offline-ready confirmation. */}
+        {pwaNeedRefresh && !updateDismissed && (
+          <UpdatePrompt onDismiss={() => setUpdateDismissed(true)} />
+        )}
+        {showOfflineToast && <OfflineReadyToast onDismiss={() => setOfflineToastDone(true)} />}
 
         {/* Portal the mini widget into the Document-PiP window. */}
         {pip.pipWindow &&
