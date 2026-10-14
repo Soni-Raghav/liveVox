@@ -1,0 +1,6 @@
+dist
+node_modules
+coverage
+dev-dist
+public/vendor
+package-lock.json

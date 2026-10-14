@@ -1,0 +1,30 @@
+/* Global styles for LiveVox (Tailwind + small custom layers). */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Thin scrollbars for the transcript panel and dialogs. */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Partial (not yet finalized) transcript text is faded until confirmed. */
+.partial-text {
+  opacity: 0.55;
+}
+
+/* Sync the UA form controls / scrollbars with the active theme. */
+html.dark {
+  color-scheme: dark;
+}
+html:not(.dark) {
+  color-scheme: light;
+}
