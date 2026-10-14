@@ -14,8 +14,12 @@ import '@fontsource/inter/700.css';
 import './index.css';
 import App from './App.jsx';
 import { initPWA } from './lib/pwa.js';
+import { useStore } from './store/useStore.js';
 
 const root = createRoot(document.getElementById('root'));
 root.render(<App />);
 
 initPWA();
+
+// Apply the persisted theme before/at startup (App reacts to later changes).
+useStore.getState().applyTheme();
