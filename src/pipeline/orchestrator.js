@@ -15,7 +15,7 @@
  * exclusively through constructor callbacks, which keeps it unit-testable
  * and lets `usePipeline` stay a thin adapter.
  */
-import { AUDIO, ASR, VAD } from '../lib/constants.js';
+import { AUDIO, ASR, NORMALIZER, VAD } from '../lib/constants.js';
 import { createLogger } from '../lib/logger.js';
 import { buildAudioGraph } from '../audio/capture.js';
 import { FrameBuffer } from '../audio/frameBuffer.js';
@@ -23,6 +23,7 @@ import { startSileroVad } from '../audio/vad.js';
 import { createEnergyVad } from '../audio/energyVad.js';
 import { WorkerClient } from '../lib/workerClient.js';
 import { detectLanguageFromText } from '../lib/languages.js';
+import { fixPunctuation, SentenceMerger, stripDisfluencies } from './normalizer.js';
 // ?url: Vite emits the worklet as a raw asset — AudioWorklet.addModule loads it.
 import resampleWorkletURL from '../audio/resample.worklet.js?url';
 
@@ -42,6 +43,7 @@ const SPLIT_CHECK_MS = 1000;
  * @property {(id: string, patch: object) => void} updateSegment
  * @property {(kind: 'asr'|'nllb'|'device', patch: object) => void} onModelEvent
  * @property {() => object} getSettings
+ * @property {() => Array<{source: string, target: string}>} [getGlossary]
  */
 
 export class LiveVoxPipeline {
@@ -63,6 +65,12 @@ export class LiveVoxPipeline {
     this.detectedSource = null;
     /** Which ASR model is loaded in the worker. */
     this.asrLoaded = null;
+    /** Whether the NLLB pipeline is loaded in the translate worker. */
+    this.nllbReady = false;
+    /** Sentence merger state (normalized fragments → sentences). */
+    this.merger = new SentenceMerger();
+    /** Translated text accumulated per segment id (sentence appends). */
+    this.translations = new Map();
 
     // The ASR worker lives for the whole app lifetime: models stay warm
     // across sessions so restarting the translation is instant.
@@ -79,6 +87,24 @@ export class LiveVoxPipeline {
         });
       }
     });
+
+    // Translation worker: NLLB / Chrome Translator / MyMemory chain.
+    this.translateClient = new WorkerClient(
+      new URL('../workers/translate.worker.js', import.meta.url),
+      {
+        name: 'translate',
+        onCrash: () =>
+          this.callbacks.onError('Translation worker crashed. Reload the page.', null),
+      }
+    );
+    this.translateClient.onNotify(({ kind, payload }) => {
+      if (kind === 'progress' && payload.total > 0) {
+        this.callbacks.onModelEvent('nllb', {
+          status: 'downloading',
+          progress: payload.loaded / payload.total,
+        });
+      }
+    });
   }
 
   /** @returns {boolean} true while a capture session is active */
@@ -87,17 +113,40 @@ export class LiveVoxPipeline {
   }
 
   /**
-   * Ensure the ASR model for the current settings is loaded (idempotent).
+   * Ensure the ASR (and NLLB) models for the current settings are loaded
+   * (idempotent). ASR failure is fatal for a session; NLLB failure is not —
+   * the translation chain falls back to Chrome Translator / MyMemory.
    * Exposed so the ModelManager can trigger downloads before a session.
    *
-   * @param {{asrMode?: string}} [overrides] - optional mode override
+   * @param {{asrMode?: string, loadNllb?: boolean}} [overrides]
    * @returns {Promise<{modelId: string, device: string}>}
    */
   async ensureModels(overrides = {}) {
     const settings = this.callbacks.getSettings();
     const mode = overrides.asrMode ?? settings.asrMode;
+    const loadNllb = overrides.loadNllb ?? settings.translationEngine !== 'chrome';
     const modelId = ASR.MODELS[mode] ?? ASR.MODELS[ASR.DEFAULT_MODE];
-    if (this.asrLoaded?.modelId === modelId) return this.asrLoaded;
+
+    // Download ASR and NLLB in parallel — cuts first-run wait time.
+    const asrPromise =
+      this.asrLoaded?.modelId === modelId
+        ? Promise.resolve(this.asrLoaded)
+        : this.#loadAsr(modelId);
+    const nllbPromise = this.nllbReady
+      ? Promise.resolve()
+      : loadNllb
+        ? this.#loadNllb()
+        : Promise.resolve();
+
+    await Promise.allSettled([asrPromise, nllbPromise]);
+    return this.asrLoaded;
+  }
+
+  /**
+   * @param {string} modelId
+   * @returns {Promise<{modelId: string, device: string}>}
+   */
+  async #loadAsr(modelId) {
     this.callbacks.onModelEvent('asr', { status: 'downloading', progress: 0, modelId });
     try {
       const result = await this.asrClient.send('load', { modelId, device: ASR.PREFERRED_DEVICE });
@@ -109,6 +158,23 @@ export class LiveVoxPipeline {
     } catch (error) {
       this.callbacks.onModelEvent('asr', { status: 'error', progress: 0, modelId });
       throw error;
+    }
+  }
+
+  /**
+   * @returns {Promise<void>}
+   */
+  async #loadNllb() {
+    this.callbacks.onModelEvent('nllb', { status: 'downloading', progress: 0 });
+    try {
+      await this.translateClient.send('load', { loadNllb: true });
+      this.nllbReady = true;
+      this.callbacks.onModelEvent('nllb', { status: 'ready', progress: 1 });
+      log.info('NLLB ready');
+    } catch (error) {
+      // Non-fatal: Chrome Translator / MyMemory keep translation alive.
+      this.callbacks.onModelEvent('nllb', { status: 'error', progress: 0 });
+      log.warn(`NLLB load failed (translation falls back): ${error.message}`);
     }
   }
 
@@ -127,6 +193,8 @@ export class LiveVoxPipeline {
     });
     this.detectedSource = null;
     this.frameBuffer.clear();
+    this.merger.reset();
+    this.translations.clear();
 
     // 1) ASR model must be ready before the first segment arrives.
     this.callbacks.onStatus('loading-models');
@@ -194,6 +262,10 @@ export class LiveVoxPipeline {
     }
     this.resamplerNode = null;
     this.frameBuffer.clear();
+    // Flush any sentence still buffered before the session ends, so the
+    // transcript does not silently lose the speaker's last words.
+    this.#flushPendingSentence();
+    this.merger.reset();
     this.graph.stop();
     this.graph = null;
     this.callbacks.onStatus('idle');
@@ -213,11 +285,13 @@ export class LiveVoxPipeline {
   }
 
   // ---------------------------------------------------------------------------
-  // Speech segment → ASR
+  // Speech segment → ASR → normalize → merge → translate
   // ---------------------------------------------------------------------------
 
   /**
-   * Handle one VAD speech segment: create a transcript entry and transcribe.
+   * Handle one VAD speech segment: create a transcript entry, transcribe,
+   * normalize, then translate every completed sentence and append the
+   * translation to the segment's row.
    *
    * @param {{audio: Float32Array, startedAt: number, endedAt: number, engine: string}} segment
    */
@@ -256,11 +330,74 @@ export class LiveVoxPipeline {
         sourceText: result.text,
         partial: false,
         detectedLang: detected,
-        state: 'done',
+        state: 'normalize',
       });
+
+      // Normalize → merge into sentences → translate (sequentially, in
+      // order, so the transcript and TTS queue stay chronological).
+      const normalized = fixPunctuation(stripDisfluencies(result.text));
+      const sentences = this.merger.feed(normalized, id);
+      for (const sentence of sentences) {
+        await this.#translateSentence(sentence);
+      }
+      this.callbacks.updateSegment(id, { state: 'done' });
     } catch (error) {
       this.callbacks.updateSegment(id, { state: 'dropped' });
       log.error(`ASR failed for segment: ${error.message}`);
+    }
+  }
+
+  /**
+   * Translate one sentence through the translate worker and append the
+   * result to the owning segment's translated text.
+   *
+   * @param {{text: string, segmentId: string}} sentence
+   */
+  async #translateSentence({ text, segmentId }) {
+    const settings = this.callbacks.getSettings();
+    const srcLang = this.#resolveSourceLanguage() ?? 'auto';
+    const payload = {
+      text,
+      srcLang,
+      tgtLang: settings.targetLang,
+      engine: settings.translationEngine,
+      glossary: this.callbacks.getGlossary?.() ?? [],
+      // MyMemory is opt-in AND automatically disabled while offline.
+      useMyMemory: settings.myMemoryOptIn && navigator.onLine,
+    };
+    try {
+      const result = await this.translateClient.send('translate', payload);
+      const previous = this.translations.get(segmentId) ?? '';
+      const joined = previous ? `${previous} ${result.text}` : result.text;
+      this.translations.set(segmentId, joined);
+      this.callbacks.updateSegment(segmentId, {
+        translatedText: joined,
+        state: 'translate',
+      });
+      log.debug(`translated via ${result.engine}${result.cached ? ' (cached)' : ''}`);
+    } catch (error) {
+      // Translation failures keep the transcript usable (source-only row).
+      log.error(`translation failed: ${error.message}`);
+      this.callbacks.updateSegment(segmentId, { state: 'done' });
+    }
+  }
+
+  /**
+   * Flush a sentence that has been waiting in the merger across a long
+   * pause (its translation lands on the most recent segment row).
+   *
+   * @param {string|null} [segmentId] - optional explicit attribution
+   */
+  #flushPendingSentence(segmentId = null) {
+    if (!this.merger.pending) return;
+    const lastSegmentId =
+      segmentId ?? (this.translations.size > 0 ? [...this.translations.keys()].pop() : null);
+    const sentences = this.merger.flushForPause(lastSegmentId);
+    for (const sentence of sentences) {
+      // Fire-and-forget: called from a timer, cannot await.
+      this.#translateSentence(sentence).catch((error) =>
+        log.error(`flush translation failed: ${error.message}`)
+      );
     }
   }
 
@@ -277,16 +414,18 @@ export class LiveVoxPipeline {
   }
 
   /**
-   * Split speech windows that exceed AUDIO.MAX_SEGMENT_MS so ASR latency
-   * stays bounded on monologues (pause() flushes the segment, resume()
-   * re-arms the detector).
+   * Periodic housekeeping: split over-long speech windows AND flush merger
+   * sentences that have been pending across a long pause (silence).
    */
   #startSegmentSplitter() {
     this.splitTimer = setInterval(() => {
       const started = this.vad?.speechStartedAt;
-      if (started === null || started === undefined) return;
-      if (Date.now() - started >= AUDIO.MAX_SEGMENT_MS) {
+      if (started !== null && started !== undefined && Date.now() - started >= AUDIO.MAX_SEGMENT_MS) {
         this.vad.splitCurrentSpeech();
+      }
+      const idleMs = this.merger.lastFeedAt > 0 ? Date.now() - this.merger.lastFeedAt : 0;
+      if (this.merger.pending && idleMs >= NORMALIZER.MAX_PAUSE_MS) {
+        this.#flushPendingSentence();
       }
     }, SPLIT_CHECK_MS);
   }
