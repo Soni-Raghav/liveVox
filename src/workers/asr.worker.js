@@ -23,8 +23,8 @@
  *   - self-hosted ONNX Runtime WASM (env.backends.onnx.wasm.wasmPaths)
  *   - browser Cache API persistence (env.useBrowserCache) — models survive
  *     reloads and work offline afterwards
- *   - local /models/ folder first, Hugging Face hub fallback
- *     (env.allowLocalModels, per the project spec)
+ *   - remote-only weights: downloaded from the Hugging Face hub
+ *     (env.allowLocalModels = false — nothing is shipped in /models/)
  *   - single-threaded WASM when the page is not cross-origin isolated
  *     (no SharedArrayBuffer ⇒ no threads; see src/sw.js for the COI flow)
  */
@@ -35,10 +35,12 @@ import { createLogger } from '../lib/logger.js';
 const log = createLogger('asr');
 
 // --- Transformers.js environment configuration (see header comment) ------
-env.allowLocalModels = true;
+// Model weights are NOT shipped with the app — they download from the HF hub
+// on first run and persist in the Cache API. allowLocalModels must stay off:
+// hosts with SPA fallbacks serve index.html (HTTP 200) for /models/* probes,
+// which breaks the config JSON parse and kills the whole model load.
+env.allowLocalModels = false;
 env.useBrowserCache = true;
-// Power users can host model folders at <base>/models/ — probed first.
-env.localModelPath = `${import.meta.env.BASE_URL}models/`;
 // Self-hosted ORT WASM binaries (scripts/copy-assets.mjs) — no CDN needed.
 env.backends.onnx.wasm.wasmPaths = `${import.meta.env.BASE_URL}vendor/ort/`;
 // WHY the isolation check: SharedArrayBuffer requires COOP/COEP. Without it

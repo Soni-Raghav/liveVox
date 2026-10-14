@@ -30,8 +30,14 @@ import { fixPunctuation, SentenceMerger, stripDisfluencies } from './normalizer.
 import { TTS as TTS_CONSTANTS, SYNC } from '../lib/constants.js';
 import { BoundedQueue } from './queue.js';
 import { SyncEngine } from './syncEngine.js';
-// ?url: Vite emits the worklet as a raw asset — AudioWorklet.addModule loads it.
+// ?url: Vite emits the worklet as a raw asset — AudioWorklet.addModule loads it
+// (worklets must be self-contained single files, and this one is).
 import resampleWorkletURL from '../audio/resample.worklet.js?url';
+// ?worker: Vite bundles these into self-contained module worker chunks with
+// resolved imports. A plain new URL() asset copy would keep bare specifiers
+// like "@huggingface/transformers" and crash the worker at startup.
+import AsrWorker from '../workers/asr.worker.js?worker';
+import TranslateWorker from '../workers/translate.worker.js?worker';
 
 const log = createLogger('pipeline');
 
@@ -106,7 +112,7 @@ export class LiveVoxPipeline {
 
     // The ASR worker lives for the whole app lifetime: models stay warm
     // across sessions so restarting the translation is instant.
-    this.asrClient = new WorkerClient(new URL('../workers/asr.worker.js', import.meta.url), {
+    this.asrClient = new WorkerClient(AsrWorker, {
       name: 'asr',
       onCrash: () =>
         this.callbacks.onError('Speech recognition worker crashed. Reload the page.', null),
@@ -122,13 +128,10 @@ export class LiveVoxPipeline {
     });
 
     // Translation worker: NLLB / Chrome Translator / MyMemory chain.
-    this.translateClient = new WorkerClient(
-      new URL('../workers/translate.worker.js', import.meta.url),
-      {
-        name: 'translate',
-        onCrash: () => this.callbacks.onError('Translation worker crashed. Reload the page.', null),
-      }
-    );
+    this.translateClient = new WorkerClient(TranslateWorker, {
+      name: 'translate',
+      onCrash: () => this.callbacks.onError('Translation worker crashed. Reload the page.', null),
+    });
     this.translateClient.onNotify(({ kind, payload }) => {
       if (kind === 'progress' && payload.total > 0) {
         this.callbacks.onModelEvent('nllb', {

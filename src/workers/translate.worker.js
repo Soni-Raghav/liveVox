@@ -36,9 +36,10 @@ import { detectLanguageFromText, isoToFlores } from '../lib/languages.js';
 const log = createLogger('translate');
 
 // --- Transformers.js environment (mirrors asr.worker.js) -----------------
-env.allowLocalModels = true;
+// Same rationale: weights download from the HF hub, never shipped locally —
+// local probes against SPA-fallback hosts return HTML and break the load.
+env.allowLocalModels = false;
 env.useBrowserCache = true;
-env.localModelPath = `${import.meta.env.BASE_URL}models/`;
 env.backends.onnx.wasm.wasmPaths = `${import.meta.env.BASE_URL}vendor/ort/`;
 if (typeof globalThis.crossOriginIsolated === 'undefined' || !globalThis.crossOriginIsolated) {
   env.backends.onnx.wasm.numThreads = 1;

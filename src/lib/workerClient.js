@@ -19,12 +19,14 @@ const log = createLogger('workerClient');
 
 export class WorkerClient {
   /**
-   * @param {URL|string} url - module worker URL
+   * @param {new (options?: object) => Worker} WorkerFactory - worker
+   *   constructor (from a Vite `?worker` import, which bundles the worker
+   *   with resolved imports — raw URL assets would crash at runtime)
    * @param {{name?: string, onCrash?: Function}} [options]
    */
-  constructor(url, options = {}) {
+  constructor(WorkerFactory, options = {}) {
     this.name = options.name ?? 'worker';
-    this.url = url;
+    this.WorkerFactory = WorkerFactory;
     this.onCrash = options.onCrash;
     /** @type {Map<number, {resolve: Function, reject: Function}>} */
     this.pending = new Map();
@@ -36,7 +38,7 @@ export class WorkerClient {
 
   /** (Re)create the underlying Worker — also used after a crash. */
   #spawn() {
-    this.worker = new Worker(this.url, { type: 'module' });
+    this.worker = new this.WorkerFactory();
     this.worker.onmessage = ({ data }) => this.#onMessage(data);
     this.worker.onerror = (event) => {
       const message = `worker "${this.name}" crashed: ${event.message ?? 'unknown error'}`;
