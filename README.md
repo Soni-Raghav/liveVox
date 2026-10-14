@@ -7,7 +7,7 @@
 Free. Offline-capable. No API keys. No backend. Audio never leaves your device.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![CI](https://github.com/YOUR_USERNAME/livevox/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/livevox/actions/workflows/ci.yml)
+[![CI](https://github.com/Soni-Raghav/liveVox/actions/workflows/ci.yml/badge.svg)](https://github.com/Soni-Raghav/liveVox/actions/workflows/ci.yml)
 
 </div>
 
@@ -22,8 +22,6 @@ two-column transcript (original | translation) runs alongside, exportable as
 Everything runs on-device: Whisper recognizes speech, NLLB-200 translates,
 the browser's speech synthesis speaks. After a one-time model download, the
 installed app works entirely offline — plane-mode included.
-
-> Replace `YOUR_USERNAME` in the CI badge above after you fork/create the repo.
 
 ## How it works
 
@@ -70,8 +68,8 @@ installed app works entirely offline — plane-mode included.
 ## Getting started (local development)
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/livevox.git
-cd livevox
+git clone https://github.com/Soni-Raghav/liveVox.git
+cd liveVox
 npm install        # also self-hosts ONNX/VAD assets into public/vendor/
 npm run dev        # → http://localhost:5173
 ```

@@ -39,7 +39,7 @@ jobs:
 
       - name: Build for GitHub Pages sub-path
         env:
-          VITE_BASE: /livevox/
+          VITE_BASE: /liveVox/
         run: npm run build
 
       - name: Upload Pages artifact
