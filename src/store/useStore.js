@@ -82,6 +82,10 @@ export const useStore = create(
       models: initialModels,
       vadModel: VAD.MODEL,
 
+      // ---- PWA lifecycle (runtime, never persisted) ----
+      pwaNeedRefresh: false, // a waiting service worker offers an update
+      pwaOfflineReady: false, // app shell precached, offline install ready
+
       // ---- persisted preferences ----
       settings: initialSettings,
       glossary: /** @type {Array<{id: string, source: string, target: string}>} */ ([]),

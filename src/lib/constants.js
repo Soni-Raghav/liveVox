@@ -118,3 +118,9 @@ export const UI = {
   LATENCY_GOOD_MS: 3000, // badge turns amber above this
   LATENCY_BAD_MS: 5000, // ...and red above this
 };
+
+/** Service-worker update prompt + offline toasts. */
+export const PWA = {
+  UPDATE_RELOAD_FALLBACK_MS: 2000, // safety-net reload if the waiting worker stalls
+  OFFLINE_READY_TOAST_MS: 6000, // "ready for offline" toast duration
+};

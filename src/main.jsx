@@ -19,7 +19,12 @@ import { useStore } from './store/useStore.js';
 const root = createRoot(document.getElementById('root'));
 root.render(<App />);
 
-initPWA();
+// Boot the service worker; the store flags drive the UpdatePrompt and the
+// offline-ready toast (see src/components/UpdatePrompt.jsx).
+initPWA({
+  onNeedRefresh: () => useStore.setState({ pwaNeedRefresh: true }),
+  onOfflineReady: () => useStore.setState({ pwaOfflineReady: true }),
+});
 
 // Apply the persisted theme before/at startup (App reacts to later changes).
 useStore.getState().applyTheme();
