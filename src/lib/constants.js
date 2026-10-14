@@ -52,7 +52,12 @@ export const ASR = {
   CHUNK_LENGTH_S: 30,
   STRIDE_LENGTH_S: 5,
   CONTEXT_TOKENS: 512, // rolling transcript context (approx. tokens)
-  PREFERRED_DEVICE: 'webgpu',
+  // WASM is the reliable default: requesting 'webgpu' on machines without a
+  // usable adapter (blocklisted GPUs, RDP, older Chrome) crashes the session
+  // with "no available backend found" — and the post-failure WASM retry can
+  // stay poisoned. The worker still probes for an adapter if webgpu is
+  // explicitly requested (see asr.worker.js resolveDevice).
+  PREFERRED_DEVICE: 'wasm',
   APPROX_MODEL_MB: { fast: 45, quality: 80 },
 };
 

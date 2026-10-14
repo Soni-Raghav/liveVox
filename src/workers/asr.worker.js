@@ -77,6 +77,26 @@ function notify(kind, payload) {
 }
 
 /**
+ * Resolve the execution device before building a pipeline. A requested
+ * 'webgpu' is downgraded to 'wasm' unless an actual GPU adapter can be
+ * obtained — attempting WebGPU without one poisons the ORT environment for
+ * the whole worker ("no available backend found"), taking the in-code WASM
+ * retry down with it.
+ *
+ * @param {string} [requested] - 'webgpu' | 'wasm' | undefined
+ * @returns {Promise<'webgpu'|'wasm'|string>} device that is safe to use
+ */
+async function resolveDevice(requested = ASR.PREFERRED_DEVICE) {
+  if (requested !== 'webgpu') return requested;
+  try {
+    const adapter = await navigator.gpu?.requestAdapter?.();
+    return adapter ? 'webgpu' : 'wasm';
+  } catch {
+    return 'wasm';
+  }
+}
+
+/**
  * Load (or reuse) the ASR pipeline. WebGPU is attempted first when requested;
  * on failure we transparently fall back to WASM — quality is identical for
  * these model sizes, only speed differs.
@@ -86,6 +106,7 @@ function notify(kind, payload) {
  * @returns {Promise<{modelId: string, device: string}>} actually loaded config
  */
 async function loadPipeline(modelId, device = ASR.PREFERRED_DEVICE) {
+  device = await resolveDevice(device);
   const key = `${modelId}:${device}`;
   if (loadedKey === key) return { modelId, device };
 
