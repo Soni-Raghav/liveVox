@@ -8,11 +8,74 @@
  * - role="log" + aria-live="polite" make it consumable by screen readers
  */
 import { useEffect, useRef } from 'react';
+import { FileDown, FileText } from 'lucide-react';
 import { useStore } from '../store/useStore.js';
 import { languageName } from '../lib/languages.js';
+import { downloadFile, toSrt, toTxt } from '../lib/exporters.js';
 
 /** Distance from the bottom (px) that still counts as "following". */
 const FOLLOW_THRESHOLD_PX = 48;
+
+/** Shared classes for the small export buttons. */
+const EXPORT_BUTTON =
+  'flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium ' +
+  'text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:cursor-not-allowed ' +
+  'disabled:opacity-40 focus-visible:outline focus-visible:outline-2 ' +
+  'focus-visible:outline-violet-500 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100';
+
+/**
+ * Export toolbar — download the current transcript as .txt or .srt.
+ * Disabled until at least one row has text; filenames carry a sortable
+ * timestamp so multiple exports from one session cannot overwrite
+ * each other.
+ *
+ * @param {{segments: object[]}} props - transcript rows from the store
+ * @returns {JSX.Element} button group
+ */
+function ExportToolbar({ segments }) {
+  const hasText = segments.some((seg) => seg.sourceText || seg.translatedText);
+
+  /**
+   * Build and download the file for the requested format.
+   *
+   * @param {'txt'|'srt'} kind - export format
+   */
+  function exportAs(kind) {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    if (kind === 'srt') {
+      downloadFile(
+        `livevox-${stamp}.srt`,
+        toSrt(segments),
+        'application/x-subrip;charset=utf-8'
+      );
+    } else {
+      downloadFile(`livevox-${stamp}.txt`, toTxt(segments));
+    }
+  }
+
+  return (
+    <div className="flex gap-1" role="group" aria-label="Export transcript">
+      <button
+        type="button"
+        disabled={!hasText}
+        onClick={() => exportAs('txt')}
+        title="Download transcript as plain text"
+        className={EXPORT_BUTTON}
+      >
+        <FileText className="h-3.5 w-3.5" aria-hidden /> TXT
+      </button>
+      <button
+        type="button"
+        disabled={!hasText}
+        onClick={() => exportAs('srt')}
+        title="Download transcript as SubRip subtitles"
+        className={EXPORT_BUTTON}
+      >
+        <FileDown className="h-3.5 w-3.5" aria-hidden /> SRT
+      </button>
+    </div>
+  );
+}
 
 /**
  * Format a timestamp as HH:MM:SS for the row header.
@@ -86,9 +149,12 @@ export default function TranscriptPanel() {
 
   return (
     <div className="flex h-full min-h-64 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <div className="grid grid-cols-2 gap-3 border-b border-slate-200 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:text-slate-400">
-        <span>Original</span>
-        <span>Translation</span>
+      <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-2 dark:border-slate-800">
+        <div className="grid flex-1 grid-cols-2 gap-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <span>Original</span>
+          <span>Translation</span>
+        </div>
+        <ExportToolbar segments={transcripts} />
       </div>
       <div
         ref={scrollRef}
