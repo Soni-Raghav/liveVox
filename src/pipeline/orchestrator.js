@@ -27,7 +27,9 @@ import { languageName } from '../lib/languages.js';
 import { WorkerClient } from '../lib/workerClient.js';
 import { detectLanguageFromText } from '../lib/languages.js';
 import { fixPunctuation, SentenceMerger, stripDisfluencies } from './normalizer.js';
-import { TTS as TTS_CONSTANTS } from '../lib/constants.js';
+import { TTS as TTS_CONSTANTS, SYNC } from '../lib/constants.js';
+import { BoundedQueue } from './queue.js';
+import { SyncEngine } from './syncEngine.js';
 // ?url: Vite emits the worklet as a raw asset — AudioWorklet.addModule loads it.
 import resampleWorkletURL from '../audio/resample.worklet.js?url';
 
@@ -79,6 +81,21 @@ export class LiveVoxPipeline {
     this.translations = new Map();
     /** Warned about missing TTS voices for these languages (once each). */
     this.noVoiceWarned = new Set();
+
+    // Sync engine: stage timestamps, smoothed latency, drift control.
+    this.sync = new SyncEngine();
+    // TTS rate multiplier while over the drift budget (reset each tick).
+    this.currentDriftBoost = 1;
+    // Bounded ASR queue: a slow Whisper must never let segments pile up —
+    // the oldest work is sacrificed when the budget is blown (spec §3.9).
+    this.asrQueue = new BoundedQueue(SYNC.MAX_ASR_QUEUE, {
+      onDrop: (job) => {
+        this.callbacks.updateSegment(job.id, { state: 'dropped' });
+        log.warn(`ASR queue overflow — dropped segment (age ${Date.now() - job.startedAt} ms)`);
+      },
+    });
+    this.asrBusy = false;
+    this.busyCount = 0;
 
     // TTS: utterance queue + ducking trigger. Voice selection, rate fitting
     // and volume are pulled from settings at dispatch time.
@@ -210,6 +227,9 @@ export class LiveVoxPipeline {
     this.frameBuffer.clear();
     this.merger.reset();
     this.translations.clear();
+    this.asrQueue.clear();
+    this.sync.reset();
+    this.currentDriftBoost = 1;
 
     // 1) ASR model must be ready before the first segment arrives.
     this.callbacks.onStatus('loading-models');
@@ -282,6 +302,8 @@ export class LiveVoxPipeline {
     // transcript does not silently lose the speaker's last words.
     this.#flushPendingSentence();
     this.merger.reset();
+    this.sync.reset();
+    this.callbacks.onLatency?.(null);
     this.graph.stop();
     this.graph = null;
     this.callbacks.onStatus('idle');
@@ -308,10 +330,9 @@ export class LiveVoxPipeline {
    * Speak a translated sentence. Rate/voice/volume settings are read here
    * so mid-session setting changes apply to the next utterance.
    *
-   * @param {{segmentId: string, text: string, sourceText: string,
-   *          startedAt: number}} options
+   * @param {{segmentId: string, text: string, sourceText: string}} options
    */
-  #speakTranslated({ segmentId, text, sourceText, startedAt }) {
+  #speakTranslated({ segmentId, text, sourceText }) {
     const settings = this.callbacks.getSettings();
     this.tts.volume = settings.translatedVolume;
     this.tts.baseRate = settings.ttsBaseRate;
@@ -331,10 +352,13 @@ export class LiveVoxPipeline {
       targetDurationMs,
       driftBoost: this.currentDriftBoost ?? 1,
       onStart: () => {
-        // End-to-end latency: capture (VAD start) → voice onset.
-        const latencyMs = Date.now() - startedAt;
-        this.callbacks.updateSegment(segmentId, { latencyMs, state: 'tts' });
-        this.callbacks.onLatency?.(latencyMs);
+        // End-to-end latency: capture (VAD start) → voice onset, smoothed
+        // by the sync engine for the badge and recorded on the row.
+        const raw = this.sync.ttsStarted(segmentId);
+        if (raw !== null) {
+          this.callbacks.updateSegment(segmentId, { latencyMs: raw, state: 'tts' });
+          this.callbacks.onLatency?.(this.sync.ewmaLatencyMs);
+        }
       },
     });
   }
@@ -373,21 +397,21 @@ export class LiveVoxPipeline {
   }
 
   // ---------------------------------------------------------------------------
-  // Speech segment → ASR → normalize → merge → translate
+  // Speech segment → ASR (bounded queue) → normalize → merge → translate
   // ---------------------------------------------------------------------------
 
   /**
-   * Handle one VAD speech segment: create a transcript entry, transcribe,
-   * normalize, then translate every completed sentence and append the
-   * translation to the segment's row.
+   * Handle one VAD speech segment: register it, enqueue for ASR and start
+   * the single-flight drain. Backpressure lives in the queue, not here.
    *
    * @param {{audio: Float32Array, startedAt: number, endedAt: number, engine: string}} segment
    */
-  async #handleSegment({ audio, startedAt, endedAt }) {
+  #handleSegment({ audio, startedAt, endedAt }) {
     if (!this.graph || !audio || audio.length < (AUDIO.TARGET_SAMPLE_RATE * VAD.MIN_SPEECH_MS) / 1000) {
       return; // sub-minimum blip
     }
     const id = crypto.randomUUID();
+    this.sync.startSegment(id, startedAt);
     this.callbacks.addSegment({
       id,
       startedAt,
@@ -399,7 +423,38 @@ export class LiveVoxPipeline {
       state: 'asr',
       latencyMs: null,
     });
+    const enqueued = this.asrQueue.enqueue({ id, audio, startedAt, endedAt });
+    if (!enqueued) {
+      // Newest-policy rejection is not expected here, but stay consistent.
+      this.callbacks.updateSegment(id, { state: 'dropped' });
+    }
+    this.#drainAsrQueue();
+  }
 
+  /**
+   * Single-flight ASR processing: at most one Whisper call in flight; the
+   * next queued job is picked up in the `finally` of the previous one, so
+   * ordering is preserved and the queue absorbs bursts.
+   */
+  #drainAsrQueue() {
+    if (this.asrBusy) return;
+    const job = this.asrQueue.dequeue();
+    if (!job) return;
+    this.asrBusy = true;
+    this.#beginBusy();
+    this.#processAsrJob(job).finally(() => {
+      this.asrBusy = false;
+      this.#endBusy();
+      this.#drainAsrQueue();
+    });
+  }
+
+  /**
+   * Transcribe, normalize and translate one segment.
+   *
+   * @param {{id: string, audio: Float32Array}} job
+   */
+  async #processAsrJob({ id, audio }) {
     const language = this.#resolveSourceLanguage();
     try {
       const result = await this.asrClient.send(
@@ -408,6 +463,7 @@ export class LiveVoxPipeline {
         // Transfer the buffer: zero-copy, and the VAD has no use for it.
         { transfer: [audio.buffer] }
       );
+      this.sync.record(id, 'asr');
       const detected = result.language ?? detectLanguageFromText(result.text)?.code ?? null;
       if (this.detectedSource === null && detected) {
         // Spec: auto language detection latches from the first segments.
@@ -469,7 +525,6 @@ export class LiveVoxPipeline {
         segmentId,
         text: result.text,
         sourceText: text,
-        startedAt: this.callbacks.getSegmentStartedAt?.(segmentId) ?? Date.now(),
       });
     } catch (error) {
       // Translation failures keep the transcript usable (source-only row).
@@ -498,6 +553,19 @@ export class LiveVoxPipeline {
   }
 
   /**
+   * Track in-flight work for the status chip ('listening' ↔ 'translating').
+   */
+  #beginBusy() {
+    this.busyCount += 1;
+    if (this.graph && this.busyCount === 1) this.callbacks.onStatus('translating');
+  }
+
+  #endBusy() {
+    this.busyCount = Math.max(0, this.busyCount - 1);
+    if (this.graph && this.busyCount === 0) this.callbacks.onStatus('listening');
+  }
+
+  /**
    * Which language to hand Whisper: explicit setting wins, then the latched
    * auto-detection, then null (Whisper's own detection head).
    *
@@ -510,8 +578,8 @@ export class LiveVoxPipeline {
   }
 
   /**
-   * Periodic housekeeping: split over-long speech windows AND flush merger
-   * sentences that have been pending across a long pause (silence).
+   * Periodic housekeeping: split over-long speech windows, flush merger
+   * sentences pending across a long pause, and run the drift controller.
    */
   #startSegmentSplitter() {
     this.splitTimer = setInterval(() => {
@@ -523,7 +591,29 @@ export class LiveVoxPipeline {
       if (this.merger.pending && idleMs >= NORMALIZER.MAX_PAUSE_MS) {
         this.#flushPendingSentence();
       }
+      this.#driftTick();
     }, SPLIT_CHECK_MS);
+  }
+
+  /**
+   * Drift controller (spec §3.9): when lag exceeds the max drift budget,
+   * drop the oldest queued segments, raise the TTS rate (≤ 1.3x) and flush
+   * stale TTS jobs. Runs once per second while a session is active.
+   */
+  #driftTick() {
+    if (!this.graph) return;
+    this.sync.maxDriftMs = this.callbacks.getSettings().maxDriftMs;
+    const pendingAges = this.asrQueue.toArray().map((job) => Date.now() - job.startedAt);
+    const assessment = this.sync.assess({ pendingAges });
+    if (assessment.dropCount > 0) {
+      this.asrQueue.dropOldest(assessment.dropCount);
+      log.warn(`drift control: dropped ${assessment.dropCount} stale segment(s)`);
+    }
+    this.currentDriftBoost = assessment.driftBoost;
+    if (assessment.flushTts) {
+      const flushed = this.tts.flushStale();
+      if (flushed > 0) log.warn(`drift control: cancelled ${flushed} stale TTS job(s)`);
+    }
   }
 
   #stopSegmentSplitter() {

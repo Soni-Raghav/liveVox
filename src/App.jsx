@@ -7,6 +7,7 @@
  */
 import ControlBar from './components/ControlBar.jsx';
 import StatusChip from './components/StatusChip.jsx';
+import LatencyBadge from './components/LatencyBadge.jsx';
 import TranscriptPanel from './components/TranscriptPanel.jsx';
 import VolumeMixer from './components/VolumeMixer.jsx';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts.js';
@@ -38,6 +39,7 @@ export default function App() {
             LiveVox
           </div>
           <div className="ml-auto flex items-center gap-2">
+            <LatencyBadge />
             <StatusChip />
           </div>
         </div>

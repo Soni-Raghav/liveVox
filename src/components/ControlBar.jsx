@@ -3,11 +3,12 @@
  * the error alert with its user-facing hint. Purely presentational; all
  * actions come from usePipeline, all state from the store.
  */
-import { AlertTriangle, Mic, Square } from 'lucide-react';
+import { AlertTriangle, Mic, Square, Zap, Brain } from 'lucide-react';
 import { useStore } from '../store/useStore.js';
 import { usePipeline } from '../hooks/usePipeline.js';
 import LanguageSelect from './LanguageSelect.jsx';
 import { SOURCE_LANGUAGES, TARGET_LANGUAGES } from '../lib/languages.js';
+import { ASR } from '../lib/constants.js';
 
 /**
  * Input level meter: a single gradient bar whose width tracks the smoothed
@@ -56,6 +57,68 @@ function ErrorAlert() {
         <p className="font-medium">{error.message}</p>
         {error.hint && <p className="mt-1 text-rose-600/90 dark:text-rose-300/80">{error.hint}</p>}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Fast vs quality recognition mode (whisper-tiny vs whisper-base).
+ * Switching downloads the other model ahead of time from the browser cache
+ * (or the hub once), so the next session starts instantly.
+ *
+ * @returns {JSX.Element} segmented mode control
+ */
+function ModeToggle() {
+  const mode = useStore((s) => s.settings.asrMode);
+  const { loadModels } = usePipeline();
+
+  /**
+   * @param {string} next - 'fast' | 'quality'
+   */
+  const select = (next) => {
+    if (next === mode) return;
+    useStore.getState().updateSettings({ asrMode: next });
+    loadModels({ asrMode: next }).catch(() => {
+      useStore.getState().setError('Could not load the selected model.', null);
+    });
+  };
+
+  const base =
+    'flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-500';
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Recognition mode"
+      className="mt-3 grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800"
+    >
+      <button
+        type="button"
+        role="radio"
+        aria-checked={mode === 'fast'}
+        onClick={() => select('fast')}
+        className={`${base} ${
+          mode === 'fast'
+            ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white'
+            : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+        }`}
+      >
+        <Zap className="h-3.5 w-3.5" aria-hidden />
+        Fast · ≈{ASR.APPROX_MODEL_MB.fast} MB
+      </button>
+      <button
+        type="button"
+        role="radio"
+        aria-checked={mode === 'quality'}
+        onClick={() => select('quality')}
+        className={`${base} ${
+          mode === 'quality'
+            ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white'
+            : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+        }`}
+      >
+        <Brain className="h-3.5 w-3.5" aria-hidden />
+        Quality · ≈{ASR.APPROX_MODEL_MB.quality} MB
+      </button>
     </div>
   );
 }
@@ -112,6 +175,7 @@ export default function ControlBar() {
           languages={TARGET_LANGUAGES}
         />
       </div>
+      <ModeToggle />
       <LevelMeter />
       <ErrorAlert />
     </div>
