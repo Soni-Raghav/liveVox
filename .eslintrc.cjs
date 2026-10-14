@@ -35,8 +35,19 @@ module.exports = {
     { files: ['vite.config.js', 'scripts/**'], env: { browser: false, node: true } },
     // AudioWorklet + ML workers run in worker scopes (self, postMessage).
     {
-      files: ['src/workers/**', 'src/audio/resample.worklet.js', 'src/audio/frameBuffer.js'],
+      files: ['src/workers/**', 'src/audio/frameBuffer.js'],
       env: { browser: false, worker: true },
+    },
+    // The resample worklet: AudioWorkletGlobalScope globals.
+    {
+      files: ['src/audio/resample.worklet.js'],
+      env: { browser: false, worker: true },
+      globals: {
+        AudioWorkletProcessor: 'readonly',
+        registerProcessor: 'readonly',
+        sampleRate: 'readonly',
+        currentTime: 'readonly',
+      },
     },
     // The service worker: workbox manifest injection global + SW scope.
     {

@@ -3,8 +3,8 @@
  *
  * Keeps a single orchestrator instance alive for the whole app lifetime
  * (models stay loaded across start/stop cycles) and exposes imperative
- * actions that components call: start, stop, volume control and — from
- * M2 on — model loading. All state flows through the Zustand store.
+ * actions for the UI: start, stop, volume control, model loading. All state
+ * flows through the Zustand store.
  */
 import { useCallback, useRef } from 'react';
 import { LiveVoxPipeline } from '../pipeline/orchestrator.js';
@@ -26,6 +26,13 @@ export function usePipeline() {
       onStatus: (status) => useStore.getState().setStatus(status),
       onError: (message, hint) => useStore.getState().setError(message, hint),
       onLevel: (level) => useStore.getState().setLevel(level),
+      addSegment: (segment) => useStore.getState().addSegment(segment),
+      updateSegment: (id, patch) => useStore.getState().updateSegment(id, patch),
+      onModelEvent: (kind, patch) => {
+        const store = useStore.getState();
+        if (kind === 'device') store.setModels({ device: patch });
+        else store.setModelEntry(kind, patch);
+      },
       getSettings: () => useStore.getState().settings,
     });
   }
@@ -57,7 +64,18 @@ export function usePipeline() {
     orchestratorRef.current.setOriginalVolume(volume);
   }, []);
 
-  return { start, stop, setOriginalVolume };
+  /**
+   * Pre-download models (ModelManager first-run screen). Resolves when the
+   * ASR (and, from M3, translation) models are ready.
+   *
+   * @param {object} [overrides] e.g. { asrMode: 'quality' }
+   * @returns {Promise<void>}
+   */
+  const loadModels = useCallback(async (overrides) => {
+    await orchestratorRef.current.ensureModels(overrides);
+  }, []);
+
+  return { start, stop, setOriginalVolume, loadModels };
 }
 
 /**
@@ -65,4 +83,5 @@ export function usePipeline() {
  * @property {() => Promise<void>} start
  * @property {() => void} stop
  * @property {(volume: number) => void} setOriginalVolume
+ * @property {(overrides?: object) => Promise<void>} loadModels
  */

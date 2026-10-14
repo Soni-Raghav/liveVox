@@ -111,6 +111,10 @@ export default defineConfig({
     target: 'es2022',
     sourcemap: false,
     chunkSizeWarningLimit: 4000,
+    // Never inline assets as data URIs: the AudioWorklet module must be a
+    // real same-origin file for addModule(), and the service worker needs
+    // real files to precache (Lighthouse/PWA + offline).
+    assetsInlineLimit: 0,
   },
   test: {
     environment: 'jsdom',

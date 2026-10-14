@@ -7,6 +7,7 @@
  */
 import ControlBar from './components/ControlBar.jsx';
 import StatusChip from './components/StatusChip.jsx';
+import TranscriptPanel from './components/TranscriptPanel.jsx';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts.js';
 import { useOnlineStatus } from './hooks/useOnlineStatus.js';
 import { usePipeline } from './hooks/usePipeline.js';
@@ -45,7 +46,9 @@ export default function App() {
         <section aria-label="Controls" className="flex flex-col gap-4">
           <ControlBar />
         </section>
-        <section aria-label="Transcript" className="min-h-64 rounded-xl border border-dashed border-slate-300 dark:border-slate-800" />
+        <section aria-label="Transcript">
+          <TranscriptPanel />
+        </section>
       </main>
     </div>
   );
