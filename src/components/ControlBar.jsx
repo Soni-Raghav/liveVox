@@ -6,6 +6,8 @@
 import { AlertTriangle, Mic, Square } from 'lucide-react';
 import { useStore } from '../store/useStore.js';
 import { usePipeline } from '../hooks/usePipeline.js';
+import LanguageSelect from './LanguageSelect.jsx';
+import { SOURCE_LANGUAGES } from '../lib/languages.js';
 
 /**
  * Input level meter: a single gradient bar whose width tracks the smoothed
@@ -93,6 +95,16 @@ export default function ControlBar() {
       <p className="mt-2 text-center text-xs text-slate-500 dark:text-slate-400">
         Pick the tab playing the video and tick “Share tab audio”. Shortcut: Space
       </p>
+      <div className="mt-3 flex gap-2">
+        <LanguageSelect
+          id="source-language"
+          label="Spoken language"
+          value={useStore((s) => s.settings.sourceLang)}
+          onChange={(code) => useStore.getState().updateSettings({ sourceLang: code })}
+          includeAuto
+          languages={SOURCE_LANGUAGES}
+        />
+      </div>
       <LevelMeter />
       <ErrorAlert />
     </div>
