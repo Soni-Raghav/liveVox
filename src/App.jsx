@@ -8,6 +8,7 @@
 import ControlBar from './components/ControlBar.jsx';
 import StatusChip from './components/StatusChip.jsx';
 import TranscriptPanel from './components/TranscriptPanel.jsx';
+import VolumeMixer from './components/VolumeMixer.jsx';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts.js';
 import { useOnlineStatus } from './hooks/useOnlineStatus.js';
 import { usePipeline } from './hooks/usePipeline.js';
@@ -18,9 +19,9 @@ import { usePipeline } from './hooks/usePipeline.js';
  * @returns {JSX.Element} the LiveVox UI
  */
 export default function App() {
-  const { start, stop } = usePipeline();
+  const { start, stop, toggleMute, isRunning } = usePipeline();
   useOnlineStatus();
-  useKeyboardShortcuts({ onStart: start, onStop: stop });
+  useKeyboardShortcuts({ onStart: start, onStop: stop, onToggleMute: toggleMute, isRunning });
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
@@ -45,6 +46,7 @@ export default function App() {
       <main className="mx-auto grid max-w-6xl gap-4 px-4 py-4 lg:grid-cols-[minmax(280px,360px)_1fr]">
         <section aria-label="Controls" className="flex flex-col gap-4">
           <ControlBar />
+          <VolumeMixer />
         </section>
         <section aria-label="Transcript">
           <TranscriptPanel />
