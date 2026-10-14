@@ -1,10 +1,15 @@
 /**
  * usePipeline — React adapter for the framework-agnostic orchestrator.
  *
- * Keeps a single orchestrator instance alive for the whole app lifetime
+ * Keeps a SINGLE orchestrator instance alive for the whole app lifetime
  * (models stay loaded across start/stop cycles) and exposes imperative
  * actions for the UI: start, stop, volume control, model loading. All state
  * flows through the Zustand store.
+ *
+ * WHY a module-level singleton: React renders the main app and the
+ * Document-PiP mini widget as SEPARATE component trees; if every
+ * usePipeline() caller spawned its own LiveVoxPipeline we would end up with
+ * two audio graphs and two model sets. One instance serves every surface.
  */
 import { useCallback, useRef } from 'react';
 import { LiveVoxPipeline } from '../pipeline/orchestrator.js';
@@ -15,14 +20,20 @@ import { useAudioCapture } from './useAudioCapture.js';
 const log = createLogger('usePipeline');
 
 /**
- * @returns {PipelineApi} imperative pipeline controls for the UI
+ * Shared orchestrator instance (created lazily on first use).
+ *
+ * @type {LiveVoxPipeline|null}
  */
-export function usePipeline() {
-  const { requestTabAudio } = useAudioCapture();
-  const orchestratorRef = useRef(null);
+let sharedPipeline = null;
 
-  if (!orchestratorRef.current) {
-    orchestratorRef.current = new LiveVoxPipeline({
+/**
+ * Get (lazily creating) the app-wide pipeline instance.
+ *
+ * @returns {LiveVoxPipeline} the singleton orchestrator
+ */
+function getPipeline() {
+  if (!sharedPipeline) {
+    sharedPipeline = new LiveVoxPipeline({
       onStatus: (status) => useStore.getState().setStatus(status),
       onError: (message, hint) => useStore.getState().setError(message, hint),
       onLevel: (level) => useStore.getState().setLevel(level),
@@ -44,10 +55,19 @@ export function usePipeline() {
       onLatency: (latencyMs) => useStore.getState().setLatency(latencyMs),
     });
   }
+  return sharedPipeline;
+}
+
+/**
+ * @returns {PipelineApi} imperative pipeline controls for the UI
+ */
+export function usePipeline() {
+  const { requestTabAudio } = useAudioCapture();
+  const pipeline = getPipeline();
 
   const start = useCallback(async () => {
     const store = useStore.getState();
-    if (orchestratorRef.current.active) return;
+    if (pipeline.active) return;
     store.setStatus('starting');
     const stream = await requestTabAudio();
     if (!stream) {
@@ -55,22 +75,25 @@ export function usePipeline() {
       return;
     }
     try {
-      await orchestratorRef.current.start(stream);
+      await pipeline.start(stream);
     } catch (error) {
       log.error(`pipeline start failed: ${error.message}`);
       store.setError('Could not start the audio pipeline.', null);
       store.setStatus('idle');
     }
-  }, [requestTabAudio]);
+  }, [pipeline, requestTabAudio]);
 
   const stop = useCallback(() => {
-    orchestratorRef.current.stop();
-  }, []);
+    pipeline.stop();
+  }, [pipeline]);
 
-  const setOriginalVolume = useCallback((volume) => {
-    useStore.getState().updateSettings({ originalVolume: volume });
-    orchestratorRef.current.setOriginalVolume(volume);
-  }, []);
+  const setOriginalVolume = useCallback(
+    (volume) => {
+      useStore.getState().updateSettings({ originalVolume: volume });
+      pipeline.setOriginalVolume(volume);
+    },
+    [pipeline]
+  );
 
   // Translated volume applies to the next utterance (the TTS manager reads
   // it at dispatch time).
@@ -98,14 +121,17 @@ export function usePipeline() {
 
   /**
    * Pre-download models (ModelManager first-run screen). Resolves when the
-   * ASR (and, from M3, translation) models are ready.
+   * ASR (and translation) models are ready.
    *
    * @param {object} [overrides] e.g. { asrMode: 'quality' }
    * @returns {Promise<void>}
    */
-  const loadModels = useCallback(async (overrides) => {
-    await orchestratorRef.current.ensureModels(overrides);
-  }, []);
+  const loadModels = useCallback(
+    async (overrides) => {
+      await pipeline.ensureModels(overrides);
+    },
+    [pipeline]
+  );
 
   return { start, stop, setOriginalVolume, setTranslatedVolume, toggleMute, isRunning, loadModels };
 }
