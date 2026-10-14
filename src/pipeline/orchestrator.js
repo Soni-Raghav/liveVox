@@ -21,9 +21,13 @@ import { buildAudioGraph } from '../audio/capture.js';
 import { FrameBuffer } from '../audio/frameBuffer.js';
 import { startSileroVad } from '../audio/vad.js';
 import { createEnergyVad } from '../audio/energyVad.js';
+import { applyDuck, applyUnduck } from '../audio/ducking.js';
+import { TtsManager } from '../audio/tts.js';
+import { languageName } from '../lib/languages.js';
 import { WorkerClient } from '../lib/workerClient.js';
 import { detectLanguageFromText } from '../lib/languages.js';
 import { fixPunctuation, SentenceMerger, stripDisfluencies } from './normalizer.js';
+import { TTS as TTS_CONSTANTS } from '../lib/constants.js';
 // ?url: Vite emits the worklet as a raw asset — AudioWorklet.addModule loads it.
 import resampleWorkletURL from '../audio/resample.worklet.js?url';
 
@@ -44,6 +48,8 @@ const SPLIT_CHECK_MS = 1000;
  * @property {(kind: 'asr'|'nllb'|'device', patch: object) => void} onModelEvent
  * @property {() => object} getSettings
  * @property {() => Array<{source: string, target: string}>} [getGlossary]
+ * @property {(segmentId: string) => number} [getSegmentStartedAt]
+ * @property {(latencyMs: number) => void} [onLatency]
  */
 
 export class LiveVoxPipeline {
@@ -71,6 +77,15 @@ export class LiveVoxPipeline {
     this.merger = new SentenceMerger();
     /** Translated text accumulated per segment id (sentence appends). */
     this.translations = new Map();
+    /** Warned about missing TTS voices for these languages (once each). */
+    this.noVoiceWarned = new Set();
+
+    // TTS: utterance queue + ducking trigger. Voice selection, rate fitting
+    // and volume are pulled from settings at dispatch time.
+    this.tts = new TtsManager({
+      onSpeakingChange: (speaking) => this.#setDucking(speaking),
+      onNoVoice: (lang) => this.#warnNoVoice(lang),
+    });
 
     // The ASR worker lives for the whole app lifetime: models stay warm
     // across sessions so restarting the translation is instant.
@@ -247,11 +262,12 @@ export class LiveVoxPipeline {
     log.info('session started');
   }
 
-  /** Stop the session: timers off, VAD down, graph down. Workers stay warm. */
+  /** Stop the session: timers off, VAD down, TTS off, graph down. Workers stay warm. */
   stop() {
     if (!this.graph) return;
     this.#stopMeter();
     this.#stopSegmentSplitter();
+    this.tts.cancelAll();
     this.vad?.stop();
     this.vad = null;
     this.energyVad = null;
@@ -282,6 +298,78 @@ export class LiveVoxPipeline {
     if (!this.graph) return;
     const { volumeGain, audioContext } = this.graph;
     volumeGain.gain.setTargetAtTime(volume, audioContext.currentTime, VOLUME_RAMP_S);
+  }
+
+  // ---------------------------------------------------------------------------
+  // TTS + ducking
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Speak a translated sentence. Rate/voice/volume settings are read here
+   * so mid-session setting changes apply to the next utterance.
+   *
+   * @param {{segmentId: string, text: string, sourceText: string,
+   *          startedAt: number}} options
+   */
+  #speakTranslated({ segmentId, text, sourceText, startedAt }) {
+    const settings = this.callbacks.getSettings();
+    this.tts.volume = settings.translatedVolume;
+    this.tts.baseRate = settings.ttsBaseRate;
+    this.tts.voiceURI = settings.ttsVoiceURI;
+
+    // Target duration = estimated spoken duration of the SOURCE sentence,
+    // so the translated voice keeps the original's cadence.
+    const sourceWords = sourceText.trim().split(/\s+/).filter(Boolean).length;
+    const targetDurationMs = (sourceWords / TTS_CONSTANTS.WORDS_PER_SECOND_AT_1X) * 1000;
+
+    this.tts.enqueue({
+      id: segmentId,
+      text,
+      lang: settings.targetLang,
+      // Cloud voices fail silently offline — restrict to local ones.
+      localOnly: !navigator.onLine,
+      targetDurationMs,
+      driftBoost: this.currentDriftBoost ?? 1,
+      onStart: () => {
+        // End-to-end latency: capture (VAD start) → voice onset.
+        const latencyMs = Date.now() - startedAt;
+        this.callbacks.updateSegment(segmentId, { latencyMs, state: 'tts' });
+        this.callbacks.onLatency?.(latencyMs);
+      },
+    });
+  }
+
+  /**
+   * Duck (or restore) the original audio while the translation speaks.
+   *
+   * @param {boolean} speaking - whether a translated utterance is active
+   */
+  #setDucking(speaking) {
+    if (!this.graph) return;
+    const settings = this.callbacks.getSettings();
+    if (!settings.duckingEnabled) {
+      applyUnduck(this.graph.duckGain);
+      return;
+    }
+    if (speaking) applyDuck(this.graph.duckGain);
+    else applyUnduck(this.graph.duckGain);
+  }
+
+  /**
+   * Surface a missing-voice problem once per language (never spam).
+   *
+   * @param {string} lang - ISO code with no usable TTS voice
+   */
+  #warnNoVoice(lang) {
+    if (this.noVoiceWarned.has(lang)) return;
+    this.noVoiceWarned.add(lang);
+    const offline = !navigator.onLine;
+    this.callbacks.onError(
+      `No ${languageName(lang)} voice is available${offline ? ' offline' : ''} on this system.`,
+      offline
+        ? 'Some voices are cloud-based. Install a local voice for this language in your OS settings, or reconnect.'
+        : 'Install a voice for this language in your OS settings to hear the translation.'
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -375,6 +463,14 @@ export class LiveVoxPipeline {
         state: 'translate',
       });
       log.debug(`translated via ${result.engine}${result.cached ? ' (cached)' : ''}`);
+      // Speak the translated sentence (ducking rides along via the TTS
+      // manager's speaking-change events).
+      this.#speakTranslated({
+        segmentId,
+        text: result.text,
+        sourceText: text,
+        startedAt: this.callbacks.getSegmentStartedAt?.(segmentId) ?? Date.now(),
+      });
     } catch (error) {
       // Translation failures keep the transcript usable (source-only row).
       log.error(`translation failed: ${error.message}`);

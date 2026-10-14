@@ -41,6 +41,9 @@ export function usePipeline() {
       },
       getSettings: () => useStore.getState().settings,
       getGlossary: () => useStore.getState().glossary,
+      getSegmentStartedAt: (segmentId) =>
+        useStore.getState().transcripts.find((s) => s.id === segmentId)?.startedAt,
+      onLatency: (latencyMs) => useStore.getState().setLatency(latencyMs),
     });
   }
 
@@ -71,6 +74,30 @@ export function usePipeline() {
     orchestratorRef.current.setOriginalVolume(volume);
   }, []);
 
+  // Translated volume applies to the next utterance (the TTS manager reads
+  // it at dispatch time).
+  const setTranslatedVolume = useCallback((volume) => {
+    useStore.getState().updateSettings({ translatedVolume: volume });
+  }, []);
+
+  /** Remembered volume for the M-key mute toggle. */
+  const preMuteVolumeRef = useRef(1);
+  const toggleMute = useCallback(() => {
+    const store = useStore.getState();
+    const { translatedVolume } = store.settings;
+    if (translatedVolume > 0) {
+      preMuteVolumeRef.current = translatedVolume;
+      store.updateSettings({ translatedVolume: 0 });
+    } else {
+      store.updateSettings({ translatedVolume: preMuteVolumeRef.current || 1 });
+    }
+  }, []);
+
+  const isRunning = useCallback(
+    () => useStore.getState().status !== 'idle' && useStore.getState().status !== 'loading-models',
+    []
+  );
+
   /**
    * Pre-download models (ModelManager first-run screen). Resolves when the
    * ASR (and, from M3, translation) models are ready.
@@ -82,7 +109,7 @@ export function usePipeline() {
     await orchestratorRef.current.ensureModels(overrides);
   }, []);
 
-  return { start, stop, setOriginalVolume, loadModels };
+  return { start, stop, setOriginalVolume, setTranslatedVolume, toggleMute, isRunning, loadModels };
 }
 
 /**
@@ -90,5 +117,8 @@ export function usePipeline() {
  * @property {() => Promise<void>} start
  * @property {() => void} stop
  * @property {(volume: number) => void} setOriginalVolume
+ * @property {(volume: number) => void} setTranslatedVolume
+ * @property {() => void} toggleMute
+ * @property {() => boolean} isRunning
  * @property {(overrides?: object) => Promise<void>} loadModels
  */
