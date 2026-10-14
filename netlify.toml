@@ -1,0 +1,14 @@
+# Netlify deployment (alternative to GitHub Pages).
+# Build output is dist/; public/_headers is copied there and honoured by
+# Netlify, giving the first uncached load COOP/COEP isolation (the service
+# worker covers all subsequent responses itself).
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cross-Origin-Opener-Policy = "same-origin"
+    Cross-Origin-Embedder-Policy = "credentialless"

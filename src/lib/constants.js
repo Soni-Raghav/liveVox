@@ -102,9 +102,8 @@ export const NORMALIZER = {
 
 /** First-run defaults (zero-config UX). */
 export const DEFAULTS = {
-  TARGET_LANG: (typeof navigator !== 'undefined' && navigator.language
-    ? navigator.language.slice(0, 2)
-    : 'en'),
+  TARGET_LANG:
+    typeof navigator !== 'undefined' && navigator.language ? navigator.language.slice(0, 2) : 'en',
   SOURCE_LANG: 'auto',
   MODE: ASR.DEFAULT_MODE,
   ORIGINAL_VOLUME: 1,

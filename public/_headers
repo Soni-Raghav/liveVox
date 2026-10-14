@@ -1,0 +1,7 @@
+# Cross-origin isolation headers for hosts that honour this file
+# (Netlify, Cloudflare Pages). Our service worker adds COOP/COEP to the
+# responses it serves; this file isolates the very first, uncached load so
+# SharedArrayBuffer (multi-threaded WASM) is available immediately.
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: credentialless

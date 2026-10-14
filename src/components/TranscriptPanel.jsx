@@ -43,11 +43,7 @@ function ExportToolbar({ segments }) {
   function exportAs(kind) {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     if (kind === 'srt') {
-      downloadFile(
-        `livevox-${stamp}.srt`,
-        toSrt(segments),
-        'application/x-subrip;charset=utf-8'
-      );
+      downloadFile(`livevox-${stamp}.srt`, toSrt(segments), 'application/x-subrip;charset=utf-8');
     } else {
       downloadFile(`livevox-${stamp}.txt`, toTxt(segments));
     }

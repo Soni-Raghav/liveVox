@@ -84,8 +84,8 @@ export default function ModelManager() {
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <h2 className="text-sm font-semibold">Download offline models</h2>
       <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-        One-time download. After this, LiveVox translates fully offline — audio never
-        leaves your device.
+        One-time download. After this, LiveVox translates fully offline — audio never leaves your
+        device.
       </p>
       <div className="mt-3 flex flex-col gap-2">
         <ModelRow

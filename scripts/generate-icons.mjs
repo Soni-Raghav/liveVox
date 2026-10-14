@@ -156,12 +156,7 @@ function renderIcon(size, maskable) {
     const x = offset + i * (barWidth + gap);
     const h = heights[i];
     const y = offset + (content - h) / 2;
-    fillRoundedRect(
-      rgba,
-      size,
-      { x, y, w: barWidth, h, r: barWidth / 2 },
-      i === 2 ? BAR_HOT : BAR
-    );
+    fillRoundedRect(rgba, size, { x, y, w: barWidth, h, r: barWidth / 2 }, i === 2 ? BAR_HOT : BAR);
   }
   return encodePng(size, size, rgba);
 }

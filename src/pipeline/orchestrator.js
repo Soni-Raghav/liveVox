@@ -108,7 +108,8 @@ export class LiveVoxPipeline {
     // across sessions so restarting the translation is instant.
     this.asrClient = new WorkerClient(new URL('../workers/asr.worker.js', import.meta.url), {
       name: 'asr',
-      onCrash: () => this.callbacks.onError('Speech recognition worker crashed. Reload the page.', null),
+      onCrash: () =>
+        this.callbacks.onError('Speech recognition worker crashed. Reload the page.', null),
     });
     this.asrClient.onNotify(({ kind, payload }) => {
       if (kind === 'progress' && payload.total > 0) {
@@ -125,8 +126,7 @@ export class LiveVoxPipeline {
       new URL('../workers/translate.worker.js', import.meta.url),
       {
         name: 'translate',
-        onCrash: () =>
-          this.callbacks.onError('Translation worker crashed. Reload the page.', null),
+        onCrash: () => this.callbacks.onError('Translation worker crashed. Reload the page.', null),
       }
     );
     this.translateClient.onNotify(({ kind, payload }) => {
@@ -407,7 +407,11 @@ export class LiveVoxPipeline {
    * @param {{audio: Float32Array, startedAt: number, endedAt: number, engine: string}} segment
    */
   #handleSegment({ audio, startedAt, endedAt }) {
-    if (!this.graph || !audio || audio.length < (AUDIO.TARGET_SAMPLE_RATE * VAD.MIN_SPEECH_MS) / 1000) {
+    if (
+      !this.graph ||
+      !audio ||
+      audio.length < (AUDIO.TARGET_SAMPLE_RATE * VAD.MIN_SPEECH_MS) / 1000
+    ) {
       return; // sub-minimum blip
     }
     const id = crypto.randomUUID();
@@ -584,7 +588,11 @@ export class LiveVoxPipeline {
   #startSegmentSplitter() {
     this.splitTimer = setInterval(() => {
       const started = this.vad?.speechStartedAt;
-      if (started !== null && started !== undefined && Date.now() - started >= AUDIO.MAX_SEGMENT_MS) {
+      if (
+        started !== null &&
+        started !== undefined &&
+        Date.now() - started >= AUDIO.MAX_SEGMENT_MS
+      ) {
         this.vad.splitCurrentSpeech();
       }
       const idleMs = this.merger.lastFeedAt > 0 ? Date.now() - this.merger.lastFeedAt : 0;
