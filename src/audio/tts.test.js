@@ -27,7 +27,9 @@ describe('computeRate', () => {
   });
 
   it('honours the user base rate within the clamp', () => {
-    expect(computeRate({ text: 'hello there friend', targetDurationMs: 1200, baseRate: 1.2 })).toBeGreaterThan(1);
+    expect(
+      computeRate({ text: 'hello there friend', targetDurationMs: 1200, baseRate: 1.2 })
+    ).toBeGreaterThan(1);
   });
 });
 
@@ -68,7 +70,9 @@ describe('TtsManager queue bounds', () => {
   it('enqueue is a safe no-op without speechSynthesis support', () => {
     const manager = new TtsManager(); // jsdom: window.speechSynthesis undefined
     expect(manager.supported).toBe(false);
-    expect(manager.enqueue({ id: 's', text: 'hi', lang: 'en', targetDurationMs: 1000 })).toBe(false);
+    expect(manager.enqueue({ id: 's', text: 'hi', lang: 'en', targetDurationMs: 1000 })).toBe(
+      false
+    );
     expect(manager.queueLength).toBe(0);
   });
 });

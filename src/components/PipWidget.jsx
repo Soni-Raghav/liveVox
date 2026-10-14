@@ -57,7 +57,10 @@ export default function PipWidget({ onClose }) {
           <span aria-live="polite">{status === 'loading-models' ? 'Loading' : status}</span>
         </span>
         {latencyMs !== null && (
-          <span className="tabular-nums" aria-label={`latency ${Math.round(latencyMs / 100) / 10} seconds`}>
+          <span
+            className="tabular-nums"
+            aria-label={`latency ${Math.round(latencyMs / 100) / 10} seconds`}
+          >
             {latencyMs >= 1000 ? `${(latencyMs / 1000).toFixed(1)} s` : `${latencyMs} ms`}
           </span>
         )}
@@ -71,7 +74,11 @@ export default function PipWidget({ onClose }) {
             running ? 'bg-rose-600 hover:bg-rose-500' : 'bg-violet-600 hover:bg-violet-500'
           }`}
         >
-          {running ? <MicOff className="h-3.5 w-3.5" aria-hidden /> : <Mic className="h-3.5 w-3.5" aria-hidden />}
+          {running ? (
+            <MicOff className="h-3.5 w-3.5" aria-hidden />
+          ) : (
+            <Mic className="h-3.5 w-3.5" aria-hidden />
+          )}
           {running ? 'Stop' : 'Start'}
         </button>
         {onClose && (

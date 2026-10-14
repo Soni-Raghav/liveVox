@@ -60,12 +60,5 @@ module.exports = {
     // Tests: node globals for vitest imports.
     { files: ['src/test/**', '**/*.test.{js,jsx}'], env: { node: true } },
   ],
-  ignorePatterns: [
-    'dist',
-    'dev-dist',
-    'node_modules',
-    'coverage',
-    'public/vendor',
-    '*.cjs',
-  ],
+  ignorePatterns: ['dist', 'dev-dist', 'node_modules', 'coverage', 'public/vendor', '*.cjs'],
 };

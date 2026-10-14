@@ -37,7 +37,11 @@ export function splitForMyMemory(text, maxBytes = TRANSLATION.MYMEMORY.MAX_QUERY
   while (encoder.encode(remaining).length > maxBytes && remaining.length > 0) {
     // Try the last sentence end within the budget, else last space, else cut.
     const window = remaining.slice(0, maxBytes);
-    let cut = Math.max(window.lastIndexOf('. '), window.lastIndexOf('! '), window.lastIndexOf('? '));
+    let cut = Math.max(
+      window.lastIndexOf('. '),
+      window.lastIndexOf('! '),
+      window.lastIndexOf('? ')
+    );
     if (cut <= 0) cut = window.lastIndexOf(' ');
     if (cut <= 0) cut = maxBytes;
     chunks.push(remaining.slice(0, cut + 1).trim());
@@ -95,7 +99,9 @@ export async function myMemoryTranslate({ text, srcLang, tgtLang }) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TRANSLATION.MYMEMORY.TIMEOUT_MS);
     try {
-      results.push(await translateChunk({ text: chunk, srcLang, tgtLang, signal: controller.signal }));
+      results.push(
+        await translateChunk({ text: chunk, srcLang, tgtLang, signal: controller.signal })
+      );
     } catch (error) {
       if (error.name === 'AbortError') {
         throw new Error(`MyMemory timed out after ${TRANSLATION.MYMEMORY.TIMEOUT_MS} ms`);

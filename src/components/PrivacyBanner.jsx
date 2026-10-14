@@ -28,8 +28,8 @@ export default function PrivacyBanner() {
         >
           <Globe className="h-3.5 w-3.5" aria-hidden />
           Online fallback enabled: when on-device engines fail
-          {online ? ' and you are online' : ''}, sentence text is sent to the free MyMemory
-          service. Audio still never leaves your device.
+          {online ? ' and you are online' : ''}, sentence text is sent to the free MyMemory service.
+          Audio still never leaves your device.
         </p>
       )}
     </div>

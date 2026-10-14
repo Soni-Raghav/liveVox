@@ -24,7 +24,10 @@ const DISFLUENCY_PATTERN = /\b(?:u+m+h*|u+hm*|erm+|er+m|h+m+|mhm|euh+|äh+|ö+hm
  */
 export function stripDisfluencies(text) {
   if (!text) return '';
-  return text.replace(DISFLUENCY_PATTERN, '').replace(/\s{2,}/g, ' ').trim();
+  return text
+    .replace(DISFLUENCY_PATTERN, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 }
 
 /**

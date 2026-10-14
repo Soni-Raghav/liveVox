@@ -105,7 +105,10 @@ export default function SettingsDialog({ onClose }) {
         </Section>
 
         <Section title="Sync">
-          <label htmlFor="max-drift" className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+          <label
+            htmlFor="max-drift"
+            className="flex justify-between text-xs text-slate-500 dark:text-slate-400"
+          >
             <span>Max drift before dropping segments</span>
             <span className="tabular-nums">{driftSeconds} s</span>
           </label>
@@ -149,7 +152,10 @@ export default function SettingsDialog({ onClose }) {
               speech may be unavailable until you install one or reconnect.
             </p>
           )}
-          <label htmlFor="tts-rate" className="mt-3 flex justify-between text-xs text-slate-500 dark:text-slate-400">
+          <label
+            htmlFor="tts-rate"
+            className="mt-3 flex justify-between text-xs text-slate-500 dark:text-slate-400"
+          >
             <span>Base speaking rate</span>
             <span className="tabular-nums">{settings.ttsBaseRate.toFixed(1)}x</span>
           </label>
@@ -198,7 +204,10 @@ export default function SettingsDialog({ onClose }) {
             />
             <span>
               Allow online fallback (MyMemory)
-              <span id="mymemory-desc" className="block text-[11px] text-slate-400 dark:text-slate-500">
+              <span
+                id="mymemory-desc"
+                className="block text-[11px] text-slate-400 dark:text-slate-500"
+              >
                 Off by default. When on, sentence TEXT is sent to the free MyMemory API only when
                 on-device engines fail and you are online. Audio never leaves your device.
               </span>

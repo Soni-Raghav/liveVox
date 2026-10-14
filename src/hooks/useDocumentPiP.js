@@ -21,8 +21,7 @@ const PIP_HEIGHT = 170;
  */
 export function useDocumentPiP() {
   const [pipWindow, setPipWindow] = useState(null);
-  const supported =
-    typeof window !== 'undefined' && 'documentPictureInPicture' in window;
+  const supported = typeof window !== 'undefined' && 'documentPictureInPicture' in window;
 
   /**
    * Copy all stylesheets of the main document into the PiP document so

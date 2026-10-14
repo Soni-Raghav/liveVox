@@ -2,7 +2,12 @@
  * Unit tests for the text normalizer.
  */
 import { describe, expect, it } from 'vitest';
-import { fixPunctuation, keepRollingContext, SentenceMerger, stripDisfluencies } from './normalizer.js';
+import {
+  fixPunctuation,
+  keepRollingContext,
+  SentenceMerger,
+  stripDisfluencies,
+} from './normalizer.js';
 
 describe('stripDisfluencies', () => {
   it('removes common fillers', () => {

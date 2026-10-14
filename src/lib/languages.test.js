@@ -48,15 +48,15 @@ describe('detectLanguageFromText', () => {
     expect(detectLanguageFromText('The quick brown fox and it was running in the park').code).toBe(
       'en'
     );
-    expect(detectLanguageFromText('El perro que corre en el parque con la pelota es grande').code).toBe(
-      'es'
-    );
-    expect(detectLanguageFromText('Le chien qui court dans le parc est très grand et rapide').code).toBe(
-      'fr'
-    );
-    expect(detectLanguageFromText('Der Hund der im Park läuft und das ist sehr schnell heute').code).toBe(
-      'de'
-    );
+    expect(
+      detectLanguageFromText('El perro que corre en el parque con la pelota es grande').code
+    ).toBe('es');
+    expect(
+      detectLanguageFromText('Le chien qui court dans le parc est très grand et rapide').code
+    ).toBe('fr');
+    expect(
+      detectLanguageFromText('Der Hund der im Park läuft und das ist sehr schnell heute').code
+    ).toBe('de');
   });
 
   it('decides non-Latin scripts by character ranges', () => {

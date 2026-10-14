@@ -116,8 +116,7 @@ export const useStore = create(
         })),
 
       // ---- settings actions ----
-      updateSettings: (patch) =>
-        set((s) => ({ settings: { ...s.settings, ...patch } })),
+      updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
 
       // ---- glossary actions ----
       addGlossaryEntry: (source, target) =>
@@ -128,7 +127,8 @@ export const useStore = create(
         set((s) => ({
           glossary: s.glossary.map((e) => (e.id === id ? { ...e, ...patch } : e)),
         })),
-      removeGlossaryEntry: (id) => set((s) => ({ glossary: s.glossary.filter((e) => e.id !== id) })),
+      removeGlossaryEntry: (id) =>
+        set((s) => ({ glossary: s.glossary.filter((e) => e.id !== id) })),
       setGlossary: (entries) => set({ glossary: entries }),
 
       /**

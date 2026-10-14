@@ -193,9 +193,9 @@ export function buildAudioGraph(stream, options = {}) {
 
   // The user can end sharing from Chrome's own "Stop sharing" bar — surface
   // it so the pipeline can shut down cleanly instead of running on silence.
-  stream.getAudioTracks().forEach((track) =>
-    track.addEventListener('ended', () => options.onStreamEnded?.())
-  );
+  stream
+    .getAudioTracks()
+    .forEach((track) => track.addEventListener('ended', () => options.onStreamEnded?.()));
 
   return graph;
 }

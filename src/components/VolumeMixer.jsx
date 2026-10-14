@@ -95,7 +95,8 @@ export default function VolumeMixer() {
           />
         </div>
         <p className="text-[11px] text-slate-400 dark:text-slate-500">
-          Mute the translated voice anytime with the <kbd className="rounded border border-slate-300 px-1 dark:border-slate-600">M</kbd> key.
+          Mute the translated voice anytime with the{' '}
+          <kbd className="rounded border border-slate-300 px-1 dark:border-slate-600">M</kbd> key.
         </p>
       </div>
     </div>

@@ -23,7 +23,8 @@ function relevantLogs(error) {
   const interesting = logs.filter(
     (entry) =>
       entry.level === 'error' ||
-      (error?.message && entry.message.toLowerCase().includes(error.message.slice(0, 20).toLowerCase()))
+      (error?.message &&
+        entry.message.toLowerCase().includes(error.message.slice(0, 20).toLowerCase()))
   );
   return interesting
     .slice(-5)

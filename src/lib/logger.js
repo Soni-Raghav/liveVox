@@ -10,8 +10,7 @@
 const RING_SIZE = 300;
 const buffer = [];
 
-const isDev =
-  typeof import.meta !== 'undefined' && !!import.meta.env && import.meta.env.DEV;
+const isDev = typeof import.meta !== 'undefined' && !!import.meta.env && import.meta.env.DEV;
 
 /**
  * Append an entry to the ring buffer and mirror it to the console.

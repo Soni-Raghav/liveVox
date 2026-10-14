@@ -61,7 +61,10 @@ const chromeTranslators = new Map();
  */
 function glossaryFingerprint(entries) {
   if (!entries || entries.length === 0) return '0';
-  return entries.map((e) => `${e.source}>${e.target}`).sort().join('~');
+  return entries
+    .map((e) => `${e.source}>${e.target}`)
+    .sort()
+    .join('~');
 }
 
 /**
@@ -138,7 +141,10 @@ async function chromeTranslate(text, srcLang, tgtLang) {
       targetLanguage: tgtLang,
     });
     if (availability !== 'available') return null;
-    translator = await globalThis.Translator.create({ sourceLanguage: srcLang, targetLanguage: tgtLang });
+    translator = await globalThis.Translator.create({
+      sourceLanguage: srcLang,
+      targetLanguage: tgtLang,
+    });
     chromeTranslators.set(key, translator);
   }
   return translator.translate(text);
@@ -231,7 +237,9 @@ async function translate(payload) {
 
   if (translated === null || translated === '') {
     throw new Error(
-      errors.length > 0 ? `all engines failed (${errors.join('; ')})` : 'no translation engine available'
+      errors.length > 0
+        ? `all engines failed (${errors.join('; ')})`
+        : 'no translation engine available'
     );
   }
 

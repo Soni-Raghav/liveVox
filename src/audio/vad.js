@@ -32,7 +32,13 @@ const log = createLogger('vad');
  * @returns {Promise<VadHandle>} handle with stop/split controls
  * @throws when the VAD (model or WASM) fails to initialize
  */
-export async function startSileroVad({ audioContext, stream, onSegment, onSpeechStart, onMisfire }) {
+export async function startSileroVad({
+  audioContext,
+  stream,
+  onSegment,
+  onSpeechStart,
+  onMisfire,
+}) {
   /** @type {{ts: number|null}} speech window start, shared with the callbacks */
   const speechStart = { ts: null };
 

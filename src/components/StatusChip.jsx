@@ -31,7 +31,8 @@ function statusVisual(status) {
       return {
         label: 'Listening',
         icon: <AudioLines className="h-3.5 w-3.5" aria-hidden />,
-        classes: 'border-emerald-300 text-emerald-600 dark:border-emerald-800 dark:text-emerald-400',
+        classes:
+          'border-emerald-300 text-emerald-600 dark:border-emerald-800 dark:text-emerald-400',
       };
     case 'translating':
       return {
