@@ -41,8 +41,6 @@ export function usePipeline() {
       },
       getSettings: () => useStore.getState().settings,
       getGlossary: () => useStore.getState().glossary,
-      getSegmentStartedAt: (segmentId) =>
-        useStore.getState().transcripts.find((s) => s.id === segmentId)?.startedAt,
       onLatency: (latencyMs) => useStore.getState().setLatency(latencyMs),
     });
   }
